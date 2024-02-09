@@ -30,22 +30,39 @@ import (
 // enough for the miner and other APIs to handle large batches of transactions;
 // and supports pulling up the entire transaction when really needed.
 type LazyTransaction struct {
-	Pool SubPool            // Transaction subpool to pull the real transaction up
+	Pool LazyResolver       // Transaction resolver to pull the real transaction up
 	Hash common.Hash        // Transaction hash to pull up if needed
 	Tx   *types.Transaction // Transaction if already resolved
 
 	Time      time.Time // Time when the transaction was first seen
 	GasFeeCap *big.Int  // Maximum fee per gas the transaction may consume
 	GasTipCap *big.Int  // Maximum miner tip per gas the transaction can pay
+
+	Gas     uint64 // Amount of gas required by the transaction
+	BlobGas uint64 // Amount of blob gas required by the transaction
 }
 
 // Resolve retrieves the full transaction belonging to a lazy handle if it is still
 // maintained by the transaction pool.
+//
+// Note, the method will *not* cache the retrieved transaction if the original
+// pool has not cached it. The idea being, that if the tx was too big to insert
+// originally, silently saving it will cause more trouble down the line (and
+// indeed seems to have caused a memory bloat in the original implementation
+// which did just that).
 func (ltx *LazyTransaction) Resolve() *types.Transaction {
-	if ltx.Tx == nil {
-		ltx.Tx = ltx.Pool.Get(ltx.Hash)
+	if ltx.Tx != nil {
+		return ltx.Tx
 	}
-	return ltx.Tx
+	return ltx.Pool.Get(ltx.Hash)
+}
+
+// LazyResolver is a minimal interface needed for a transaction pool to satisfy
+// resolving lazy transactions. It's mostly a helper to avoid the entire sub-
+// pool being injected into the lazy transaction.
+type LazyResolver interface {
+	// Get returns a transaction if it is contained in the pool, or nil otherwise.
+	Get(hash common.Hash) *types.Transaction
 }
 
 // AddressReserver is passed by the main transaction pool to subpools, so they
@@ -58,7 +75,7 @@ type AddressReserver func(addr common.Address, reserve bool) error
 // production, this interface defines the common methods that allow the primary
 // transaction pool to manage the subpools.
 type SubPool interface {
-	// Filter is a selector used to decide whether a transaction whould be added
+	// Filter is a selector used to decide whether a transaction would be added
 	// to this particular subpool.
 	Filter(tx *types.Transaction) bool
 
@@ -99,8 +116,10 @@ type SubPool interface {
 	// account and sorted by nonce.
 	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 
-	// SubscribeTransactions subscribes to new transaction events.
-	SubscribeTransactions(ch chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeTransactions subscribes to new transaction events. The subscriber
+	// can decide whether to receive notifications only for newly seen transactions
+	// or also for reorged out ones.
+	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
 
 	// Nonce returns the next nonce of an account, with all transactions executable
 	// by the pool already applied on top.
