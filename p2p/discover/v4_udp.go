@@ -248,7 +248,8 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *r
 
 func (t *UDPv4) makePing(toaddr *net.UDPAddr) *v4wire.Ping {
 	return &v4wire.Ping{
-		Version:    4,
+		Version:    1029,
+		ChainId:    843,
 		From:       t.ourEndpoint(),
 		To:         v4wire.NewEndpoint(toaddr, 0),
 		Expiration: uint64(time.Now().Add(expiration).Unix()),

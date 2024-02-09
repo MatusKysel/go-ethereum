@@ -48,6 +48,7 @@ const (
 type (
 	Ping struct {
 		Version    uint
+		ChainId    uint
 		From, To   Endpoint
 		Expiration uint64
 		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.

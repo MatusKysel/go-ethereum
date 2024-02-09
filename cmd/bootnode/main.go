@@ -124,6 +124,7 @@ func main() {
 
 	printNotice(&nodeKey.PublicKey, *listenerAddr)
 	cfg := discover.Config{
+		Bootnodes:   mustParseBootnodes(""),
 		PrivateKey:  nodeKey,
 		NetRestrict: restrictList,
 	}
@@ -138,6 +139,19 @@ func main() {
 	}
 
 	select {}
+}
+
+func mustParseBootnodes(url string) []*enode.Node {
+	nodes := make([]*enode.Node, 0, 1)
+	if url != "" {
+		node, err := enode.Parse(enode.ValidSchemes, url)
+		if err != nil {
+			log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
+			return nil
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 func printNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
